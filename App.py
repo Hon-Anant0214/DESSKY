@@ -4,7 +4,7 @@ import os
 
 app = Flask(__name__)
 
-OPENROUTER_API_KEY = os.getenv("Osk-or-v1-7de630728e21ac5a3b74f86fe62365effa3e0b2f2026c3549b4f1468635e5b13")
+OPENROUTER_API_KEY = os.getenv("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")
 
 @app.route("/")
 def home():
@@ -17,6 +17,9 @@ def ask():
 
     if not question:
         return jsonify({"answer": "No question received"}), 400
+
+    if not OPENROUTER_API_KEY:
+        return jsonify({"answer": "Missing OPENROUTER_API_KEY on server"}), 500
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -31,23 +34,22 @@ def ask():
         ]
     }
 
-    r = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=60
-    )
+    try:
+        r = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+    except Exception as e:
+        return jsonify({"answer": f"Request failed: {str(e)}"}), 500
 
     if r.status_code != 200:
         return jsonify({
-            "answer": "OpenRouter error",
+            "answer": f"OpenRouter {r.status_code}",
             "details": r.text
-        }), 500
+        }), r.status_code
 
     result = r.json()
     answer = result["choices"][0]["message"]["content"]
-
     return jsonify({"answer": answer})
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
