@@ -16,10 +16,10 @@ def ask():
     question = data.get("question", "").strip()
 
     if not question:
-        return jsonify({"answer": "No question received"}), 400
+        return jsonify({"answer": "Please ask a question."}), 400
 
     if not OPENROUTER_API_KEY:
-        return jsonify({"answer": "Missing API key"}), 500
+        return jsonify({"answer": "Missing API key on server."}), 500
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -29,9 +29,23 @@ def ask():
     payload = {
         "model": "openai/gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": "You are Desk Buddy, a helpful robot assistant."},
-            {"role": "user", "content": question}
-        ]
+            {
+                "role": "system",
+                "content": (
+                    "You are DeskBuddy, a small desk robot assistant. "
+                    "Reply in very simple human-friendly language. "
+                    "Keep answers short, clear, and easy to read. "
+                    "Use 2 to 4 short lines maximum. "
+                    "Avoid long paragraphs, markdown, and bullet points unless necessary."
+                )
+            },
+            {
+                "role": "user",
+                "content": question
+            }
+        ],
+        "max_tokens": 100,
+        "temperature": 0.6
     }
 
     try:
@@ -51,7 +65,7 @@ def ask():
         }), r.status_code
 
     result = r.json()
-    answer = result["choices"][0]["message"]["content"]
+    answer = result["choices"][0]["message"]["content"].strip()
 
     return jsonify({"answer": answer})
 
