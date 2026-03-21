@@ -19,7 +19,7 @@ def ask():
         return jsonify({"answer": "No question received"}), 400
 
     if not OPENROUTER_API_KEY:
-        return jsonify({"answer": "Missing OPENROUTER_API_KEY on server"}), 500
+        return jsonify({"answer": "Missing API key"}), 500
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -29,7 +29,6 @@ def ask():
     payload = {
         "model": "openai/gpt-4o-mini",
         "messages": [
-            {"role": "system", "content": "You are Desk Buddy, a helpful robot assistant."},
             {"role": "user", "content": question}
         ]
     }
@@ -39,17 +38,15 @@ def ask():
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
             json=payload,
-            timeout=60
+            timeout=20
         )
     except Exception as e:
         return jsonify({"answer": f"Request failed: {str(e)}"}), 500
 
-    if r.status_code != 200:
-        return jsonify({
-            "answer": f"OpenRouter {r.status_code}",
-            "details": r.text
-        }), r.status_code
+    return jsonify({
+        "status_code": r.status_code,
+        "raw": r.text
+    })
 
-    result = r.json()
-    answer = result["choices"][0]["message"]["content"]
-    return jsonify({"answer": answer})
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
