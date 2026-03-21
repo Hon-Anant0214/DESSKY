@@ -4,7 +4,7 @@ import os
 
 app = Flask(__name__)
 
-OPENROUTER_API_KEY = os.getenv("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")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 @app.route("/")
 def home():
@@ -29,6 +29,7 @@ def ask():
     payload = {
         "model": "openai/gpt-4o-mini",
         "messages": [
+            {"role": "system", "content": "You are Desk Buddy, a helpful robot assistant."},
             {"role": "user", "content": question}
         ]
     }
@@ -43,10 +44,16 @@ def ask():
     except Exception as e:
         return jsonify({"answer": f"Request failed: {str(e)}"}), 500
 
-    return jsonify({
-        "status_code": r.status_code,
-        "raw": r.text
-    })
+    if r.status_code != 200:
+        return jsonify({
+            "answer": f"Error {r.status_code}",
+            "details": r.text
+        }), r.status_code
+
+    result = r.json()
+    answer = result["choices"][0]["message"]["content"]
+
+    return jsonify({"answer": answer})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
