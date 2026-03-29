@@ -5,6 +5,15 @@ import os
 app = Flask(__name__)
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+SYSTEM_PROMPT = (
+    "You are DeskBuddy, a small desk robot assistant. "
+    "Reply in very simple human-friendly language. "
+    "Keep answers short, clear, and easy to read. "
+    "Use 2 to 4 short lines maximum. "
+    "Avoid long paragraphs, markdown, and bullet points unless necessary."
+)
 
 @app.route("/")
 def home():
@@ -31,13 +40,7 @@ def ask():
         "messages": [
             {
                 "role": "system",
-                "content": (
-                    "You are DeskBuddy, a small desk robot assistant. "
-                    "Reply in very simple human-friendly language. "
-                    "Keep answers short, clear, and easy to read. "
-                    "Use 2 to 4 short lines maximum. "
-                    "Avoid long paragraphs, markdown, and bullet points unless necessary."
-                )
+                "content": SYSTEM_PROMPT
             },
             {
                 "role": "user",
@@ -50,7 +53,7 @@ def ask():
 
     try:
         r = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            OPENROUTER_URL,
             headers=headers,
             json=payload,
             timeout=20
@@ -64,10 +67,17 @@ def ask():
             "details": r.text
         }), r.status_code
 
-    result = r.json()
-    answer = result["choices"][0]["message"]["content"].strip()
+    try:
+        result = r.json()
+        answer = result["choices"][0]["message"]["content"].strip()
+    except Exception:
+        return jsonify({
+            "answer": "Invalid response from OpenRouter.",
+            "details": r.text
+        }), 500
 
     return jsonify({"answer": answer})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
