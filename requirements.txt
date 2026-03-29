@@ -1,7 +1,8 @@
-Flask
-requests
-gunicorn
-openai-whisper
-torch
-torchaudio
-coqui-tts
+Flask==3.0.3
+requests==2.32.3
+gunicorn==22.0.0
+openai-whisper==20231117
+torch==2.2.2
+torchaudio==2.2.2
+coqui-tts==0.27.2
+numpy==1.26.4
