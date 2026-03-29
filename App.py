@@ -1,25 +1,30 @@
 from flask import Flask, request, jsonify
 import requests
 import os
+import base64
+import whisper
+from TTS.api import TTS
 
 app = Flask(__name__)
 
+# API key
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-@app.route("/")
-def home():
-    return "Desk Buddy backend is running"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-@app.route("/ask", methods=["POST"])
-def ask():
-    data = request.get_json(silent=True) or {}
-    question = data.get("question", "").strip()
+# Load models once when server starts
+print("Loading Whisper model...")
+whisper_model = whisper.load_model("base")
 
-    if not question:
-        return jsonify({"answer": "Please ask a question."}), 400
+print("Loading TTS model...")
+tts = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC")
 
-    if not OPENROUTER_API_KEY:
-        return jsonify({"answer": "Missing API key on server."}), 500
+SYSTEM_PROMPT = (
+    "You are DeskBuddy, a small desk robot assistant. "
+    "Reply in simple language and keep answers short."
+)
+
+def ask_llm(question):
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -29,45 +34,76 @@ def ask():
     payload = {
         "model": "openai/gpt-4o-mini",
         "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are DeskBuddy, a small desk robot assistant. "
-                    "Reply in very simple human-friendly language. "
-                    "Keep answers short, clear, and easy to read. "
-                    "Use 2 to 4 short lines maximum. "
-                    "Avoid long paragraphs, markdown, and bullet points unless necessary."
-                )
-            },
-            {
-                "role": "user",
-                "content": question
-            }
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": question}
         ],
-        "max_tokens": 100,
+        "max_tokens": 120,
         "temperature": 0.6
     }
 
-    try:
-        r = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=20
-        )
-    except Exception as e:
-        return jsonify({"answer": f"Request failed: {str(e)}"}), 500
+    r = requests.post(
+        OPENROUTER_URL,
+        headers=headers,
+        json=payload,
+        timeout=30
+    )
 
     if r.status_code != 200:
-        return jsonify({
-            "answer": f"Error {r.status_code}",
-            "details": r.text
-        }), r.status_code
+        raise Exception(f"OpenRouter error: {r.text}")
 
     result = r.json()
-    answer = result["choices"][0]["message"]["content"].strip()
 
-    return jsonify({"answer": answer})
+    return result["choices"][0]["message"]["content"].strip()
+
+
+@app.route("/")
+def home():
+    return "Desk Buddy backend running"
+
+
+@app.route("/voice", methods=["POST"])
+def voice():
+
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file"}), 400
+
+    audio_file = request.files["audio"]
+
+    input_audio = "input.wav"
+    output_audio = "response.wav"
+
+    audio_file.save(input_audio)
+
+    print("Transcribing audio...")
+
+    result = whisper_model.transcribe(input_audio)
+
+    transcript = result["text"].strip()
+
+    print("User said:", transcript)
+
+    answer = ask_llm(transcript)
+
+    print("AI answer:", answer)
+
+    print("Generating speech...")
+
+    tts.tts_to_file(
+        text=answer,
+        file_path=output_audio
+    )
+
+    with open(output_audio, "rb") as f:
+        audio_bytes = f.read()
+
+    audio_b64 = base64.b64encode(audio_bytes).decode()
+
+    return jsonify({
+        "transcript": transcript,
+        "answer": answer,
+        "audio": audio_b64
+    })
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
